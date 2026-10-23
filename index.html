@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background-color: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            overflow-x: hidden;
+        }
+        body { display: flex; justify-content: center; align-items: flex-start; padding: 16px 8px; box-sizing: border-box; }
+        .wordle-container {
+            background-color: #fff; display: flex; flex-direction: column; align-items: center;
+            padding: 12px; width: 100%; max-width: 500px; margin: 0 auto; position: relative;
+        }
+        .wordle-container.disabled-all { pointer-events: none !important; }
+        h1 { color: #333; margin: 4px 0 14px 0; font-size: clamp(18px, 4vw, 24px); letter-spacing: 1px; text-align: center; font-weight: bold; }
+        #grid {
+            display: grid; grid-template-columns: repeat(2, auto); grid-template-rows: repeat(5, auto);
+            grid-auto-flow: column; grid-column-gap: clamp(12px, 3vw, 24px); grid-row-gap: 4px;
+            margin-bottom: 12px; justify-content: center;
+        }
+        .row-group { display: grid; grid-template-columns: repeat(5, 1fr); grid-column-gap: 3px; justify-content: center; }
+        .tile {
+            width: clamp(24px, 7vw, 38px); height: clamp(24px, 7vw, 38px); border: 1.5px solid #d0d5dd;
+            background-color: #fff; color: #333; display: flex; align-items: center; justify-content: center;
+            font-size: clamp(12px, 3.5vw, 18px); font-weight: bold; border-radius: 4px; line-height: 1;
+            transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+        }
+        .tile.typing { border-color: #d0d5dd; color: #000; }
+        .tile.flip { transform: scale(1.08); }
+        .controls { display: flex; gap: 6px; margin-bottom: 10px; align-items: center; justify-content: center; width: 100%; height: 38px; }
+        input[type="text"] {
+            font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+            padding: 0 8px; font-size: clamp(14px, 3vw, 16px); font-weight: bold; width: clamp(180px, 45vw, 240px);
+            height: 34px; text-align: center; border: 1.5px solid #ccc; border-radius: 6px; outline: none; -webkit-appearance: none;
+        }
+        #message { font-size: 12px; font-weight: bold; color: #333; min-height: 16px; text-align: center; margin-bottom: 6px; }
+        .keyboard-container { width: 100%; display: flex; flex-direction: column; align-items: center; }
+        .keyboard-extra-row { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 2px; margin-bottom: 4px; width: 100%; }
+        .giveup-btn {
+            grid-column: 5 / 7; background-color: #e58888; color: white; padding: 0; height: clamp(24px, 5.5vw, 32px);
+            border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; width: 100%;
+        }
+        .giveup-btn:hover { background-color: #d77575; }
+        .white-flag-icon { width: clamp(13px, 3vw, 16px); height: clamp(13px, 3vw, 16px); fill: #ffffff; }
+        .end-game-btns { grid-column: 5 / 9; display: flex; gap: 4px; width: 100%; }
+        .btn-start-game { flex: 2.2; background-color: #5cb85c; color: white; border: none; border-radius: 4px; font-size: clamp(9px, 2vw, 12px); font-weight: bold; height: clamp(24px, 5.5vw, 32px); cursor: pointer; white-space: nowrap; }
+        .btn-result { flex: 1; background-color: #428bca; color: white; border: none; border-radius: 4px; font-size: clamp(9px, 2vw, 12px); font-weight: bold; height: clamp(24px, 5.5vw, 32px); cursor: pointer; white-space: nowrap; }
+        .backspace-btn {
+            grid-column: 9 / 11; width: 100%; height: clamp(24px, 5.5vw, 32px); border: 1px solid #f0f2f5;
+            background-color: #e9ecef; color: #212529; display: flex; align-items: center; justify-content: center;
+            font-size: clamp(14px, 3.5vw, 18px); font-weight: bold; border-radius: 4px; cursor: pointer; user-select: none;
+        }
+        .keyboard-section { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 2px; margin-bottom: 3px; width: 100%; }
+        .key-tile {
+            width: 100%; height: clamp(22px, 5vw, 34px); border: 1px solid #dcdcdc; background-color: #f0f2f5; color: #333;
+            display: flex; align-items: center; justify-content: center; font-size: clamp(10px, 2.2vw, 13px); font-weight: bold;
+            border-radius: 3px; user-select: none; cursor: pointer; line-height: 1; padding: 0;
+        }
+        .key-tile.empty { border: none; background-color: transparent; cursor: default; }
+        .enter-btn-container { width: 100%; display: flex; justify-content: center; margin-top: 6px; }
+        .enter-btn {
+            background: #f0f2f5; border: 1.5px solid #ccc; color: #000; font-size: clamp(11px, 2.5vw, 14px); font-weight: bold;
+            letter-spacing: 0.5px; padding: 2px 16px; min-width: 90px; height: clamp(24px, 5.5vw, 32px); border-radius: 4px; cursor: pointer;
+        }
+        .enter-btn:disabled { background: #f0f2f5 !important; color: #aaa !important; border-color: #e0e0e0 !important; cursor: not-allowed !important; }
+        .bottom-streak-container { width: 100%; display: flex; justify-content: flex-start; margin-top: 10px; }
+        .streak-pill { background-color: #ffffff; color: #555555; border: 1.5px solid #dcdcdc; padding: 3px 12px; border-radius: 16px; font-size: clamp(10px, 2.2vw, 12px); font-weight: normal; }
+        .correct { background-color: #6aaa64 !important; border-color: #6aaa64 !important; color: white !important; }
+        .present { background-color: #c9b458 !important; border-color: #c9b458 !important; color: white !important; }
+        .absent  { background-color: #787c7e !important; border-color: #787c7e !important; color: white !important; }
+        .answer-toast {
+            display: none; position: absolute; top: 55%; left: 50%; transform: translate(-50%, -50%);
+            background-color: #000000; color: #ffffff; font-weight: bold; font-size: 16px; padding: 10px 24px;
+            border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 999; text-align: center; white-space: nowrap;
+        }
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.4); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-card { background: #ffffff; border-radius: 12px; width: 270px; padding: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); position: relative; text-align: center; }
+        .modal-close { position: absolute; top: 8px; right: 12px; background: none; border: none; font-size: 18px; color: #888; cursor: pointer; }
+        .modal-title { font-size: 16px; font-weight: bold; color: #222; margin-top: 4px; }
+        .modal-streak { font-size: 14px; font-weight: bold; color: #5db85c; margin: 4px 0 12px 0; }
+        .modal-divider { border-top: 1px solid #eee; margin: 10px 0; }
+        .modal-question { font-size: 13px; font-weight: bold; color: #333; margin-bottom: 2px; }
+        .modal-note { font-size: 10px; color: #888; margin-bottom: 14px; }
+        .modal-buttons { display: flex; justify-content: center; gap: 12px; }
+        .btn-modal-giveup { background-color: #6c757d; color: white; border: none; padding: 6px 14px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; }
+        .btn-modal-ok { background-color: #5cb85c; color: white; border: none; padding: 6px 16px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div class="wordle-container" id="mainContainer">
+    <h1>POKEMON WORDLE</h1>
+
+    <div id="grid"></div>
+
+    <div id="answerToast" class="answer-toast"></div>
+
+    <div class="controls" id="controlsArea">
+        <input type="text" id="guessInput" placeholder="ポケモン名" maxlength="5" autofocus>
+    </div>
+
+    <div id="message"></div>
+
+    <div class="keyboard-container">
+        <div class="keyboard-extra-row">
+            <button id="giveupBtn" class="giveup-btn" onclick="giveUp(event)" title="降参">
+                <svg class="white-flag-icon" viewBox="0 0 24 24">
+                    <path d="M14.4 6L14 4H5v17h2v-7h5.6l.4 2h7V6h-5.6z"/>
+                </svg>
+            </button>
+
+            <div id="endGameBtns" class="end-game-btns" style="display: none;">
+                <button class="btn-start-game" onclick="initGame()">ゲーム開始</button>
+                <button class="btn-result" onclick="openModal(isClearGame)">結果</button>
+            </div>
+
+            <div class="backspace-btn" onclick="handleBackspace()">⌫</div>
+        </div>
+
+        <div id="keyboard-top" class="keyboard-section"></div>
+        <div id="keyboard-bottom" class="keyboard-section"></div>
+
+        <div class="enter-btn-container">
+            <button id="submitBtn" class="enter-btn" onclick="makeGuess()">ENTER</button>
+        </div>
+    </div>
+
+    <div class="bottom-streak-container">
+        <div class="streak-pill">
+            <span id="streakCount">0</span> 連鎖中
+        </div>
+    </div>
+</div>
+
+<div id="clearModal" class="modal-overlay">
+    <div class="modal-card">
+        <button class="modal-close" onclick="closeModal()">×</button>
+        <div class="modal-title">エンドレス</div>
+        <div class="modal-streak"><span id="modalStreakCount">0</span> 連鎖中</div>
+
+        <div id="modalButtonsArea">
+            <div class="modal-divider"></div>
+            <div class="modal-question">次の問題に進みますか？</div>
+            <div class="modal-note">※GIVE UPを選ぶと連鎖が止まります</div>
+
+            <div class="modal-buttons">
+                <button class="btn-modal-giveup" onclick="modalGiveUp()">GIVE UP</button>
+                <button class="btn-modal-ok" onclick="modalNextGame()">➔ OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const fullList = ["フシギダネ","フシギソウ","フシギバナ","ヒトカゲ","リザード","リザードン","ゼニガメ","カメール","カメックス","キャタピー","トランセル","バタフリー","ビードル","コクーン","スピアー","ポッポ","ピジョン","ピジョット","コラッタ","ラッタ","オニスズメ","オニドリル","アーボ","アーボック","ピカチュウ","ライチュウ","サンド","サンドパン","ニドラン♀","ニドリーナ","ニドクイン","ニドラン♂","ニドリーノ","ニドキング","ピッピ","ピクシー","ロコン","キュウコン","プリン","プクリン","ズバット","ゴルバット","ナゾノクサ","クサイハナ","ラフレシア","パラス","パラセクト","コンパン","モルフォン","ディグダ","ダグトリオ","ニャース","ペルシアン","コダック","ゴルダック","マンキー","オコリザル","ガーディ","ウインディ","ニョロモ","ニョロゾ","ニョロボン","ケーシィ","ユンゲラー","フーディン","ワンリキー","ゴーリキー","カイリキー","マダツボミ","ウツドン","ウツボット","メノクラゲ","ドククラゲ","イシツブテ","ゴローン","ゴローニャ","ポニータ","ギャロップ","ヤドン","ヤドラン","コイル","レアコイル","カモネギ","ドードー","ドードリオ","パウワウ","ジュゴン","ベトベター","ベトベトン","シェルダー","パルシェン","ゴース","ゴースト","ゲンガー","イワーク","スリープ","スリーパー","クラブ","キングラー","ビリリダマ","マルマイン","タマタマ","ナッシー","カラカラ","ガラガラ","サワムラー","エビワラー","ベロリンガ","ドガース","マタドガス","サイホーン","サイドン","ラッキー","モンジャラ","ガルーラ","タッツー","シードラ","トサキント","アズマオウ","ヒトデマン","スターミー","バリヤード","ストライク","ルージュラ","エレブー","ブーバー","カイロス","ケンタロス","コイキング","ギャラドス","ラプラス","メタモン","イーブイ","シャワーズ","サンダース","ブースター","ポリゴン","オムナイト","オムスター","カブト","カブトプス","プテラ","カビゴン","フリーザー","サンダー","ファイヤー","ミニリュウ","ハクリュー","カイリュー","ミュウツー","ミュウ","チコリータ","ベイリーフ","メガニウム","ヒノアラシ","マグマラシ","バクフーン","ワニノコ","アリゲイツ","オーダイル","オタチ","オオタチ","ホーホー","ヨルノズク","レディバ","レディアン","イトマル","アリアドス","クロバット","チョンチー","ランターン","ピチュー","ピィ","ププリン","トゲピー","トゲチック","ネイティ","ネイティオ","メリープ","モココ","デンリュウ","キレイハナ","マリル","マリルリ","ウソッキー","ニョロトノ","ハネッコ","ポポッコ","ワタッコ","エイパム","ヒマナッツ","キマワリ","ヤンヤンマ","ウパー","ヌオー","エーフィ","ブラッキー","ヤミカラス","ヤドキング","ムウマ","アンノーン","ソーナンス","キリンリキ","クヌギダマ","フォレトス","ノコッチ","グライガー","ハガネール","ブルー","グランブル","ハリーセン","ハッサム","ツボツボ","ヘラクロス","ニューラ","ヒメグマ","リングマ","マグマッグ","マグカルゴ","ウリムー","イノムー","サニーゴ","テッポウオ","オクタン","デリバード","マンタイン","エアームド","デルビル","ヘルガー","キングドラ","ゴマゾウ","ドンファン","ポリゴン2","オドシシ","ドーブル","バルキー","カポエラー","ムチュール","エレキッド","ブビィ","ミルタンク","ハピナス","ライコウ","エンテイ","スイクン","ヨーギラス","サナギラス","バンギラス","ルギア","ホウオウ","セレビィ","キモリ","ジュプトル","ジュカイン","アチャモ","ワカシャモ","バシャーモ","ミズゴロウ","ヌマクロー","ラグラージ","ポチエナ","グラエナ","ジグザグマ","マッスグマ","ケムッソ","カラサリス","アゲハント","マユルド","ドクケイル","ハスボー","ハスブレロ","ルンパッパ","タネボー","コノハナ","ダーテング","スバメ","オオスバメ","キャモメ","ペリッパー","ラルトス","キルリア","サーナイト","アメタマ","アメモース","キノココ","キノガッサ","ナマケロ","ヤルキモノ","ケッキング","ツチニン","テッカニン","ヌケニン","ゴニョニョ","ドゴーム","バクオング","マクノシタ","ハリテヤマ","ルリリ","ノズパス","エネコ","エネコロロ","ヤミラミ","クチート","ココドラ","コドラ","ボスゴドラ","アサナン","チャーレム","ラクライ","ライボルト","プラスル","マイナン","バルビート","イルミーゼ","ロゼリア","ゴクリン","マルノーム","キバニア","サメハダー","ホエルコ","ホエルオー","ドンメル","バクーダ","コータス","バネブー","ブーピッグ","パッチール","ナックラー","ビブラーバ","フライゴン","サボネア","ノクタス","チルット","チルタリス","ザングース","ハブネーク","ルナトーン","ソルロック","ドジョッチ","ナマズン","ヘイガニ","シザリガー","ヤジロン","ネンドール","リリーラ","ユレイドル","アノプス","アーマルド","ヒヒバリス","ミロカロス","ポワルン","カクレオン","カゲボウズ","ジュペッタ","ヨマワル","サマヨール","トロピウス","チリーン","アブソル","ソーナノ","ユキワラシ","オニゴーリ","タマザラシ","トドグラー","トドゼルガ","パールル","ハンテール","サクラビス","ジーランス","ラブカス","タツベイ","コモルー","ボーマンダ","ダンバル","メタング","メタグロス","レジロック","レジアイス","レジスチル","ラティアス","ラティオス","カイオーガ","グラードン","レックウザ","ジラーチ","デオキシス","ナエトル","ハヤシガメ","ドダイトス","ヒコザル","モウカザル","ゴウカザル","ポッチャマ","ポッタイシ","エンペルト","ムックル","ムクバード","ムクホーク","ビッパ","ビーダル","コロボーシ","コロトック","コリンク","ルクシオ","レントラー","スボミー","ロズレイド","ズガイドス","ラムパルド","タテトプス","トリデプス","ミノムッチ","ミノマダム","ガーメイル","ミツハニー","ビークイン","パチリス","ブイゼル","フローゼル","チェリンボ","チェリム","カラナクシ","トリトドン","エテボース","フワンテ","フワライド","ミミロル","ミミロップ","ムウマージ","ドンカラス","ニャルマー","ブニャット","リーシャン","スカンプー","スカタンク","ドーミラー","ドータクン","ウソハチ","マネネ","ピンプク","ペラップ","ミカルゲ","フカマル","ガバイト","ガブリアス","ゴンベ","リオル","ルカリオ","ヒポポタス","カバルドン","スコルピ","ドラピオン","グレッグル","ドクロッグ","マスキッパ","ケイコウオ","ネオラント","タマンタ","ユキカブリ","ユキノオー","マニューラ","ジバコイル","ベロベルト","ドサイドン","モジャンボ","エレキブル","ブーバーン","トゲキッス","メガヤンマ","リーフィア","グレイシア","グライオン","マンムー","ポリゴンZ","エルレイド","ダイノーズ","ヨノワール","ユキメノコ","ロトム","ユクシー","エムリット","アグノム","ディアルガ","パルキア","ヒードラン","レジギガス","ギラティナ","クレセリア","フィオネ","マナフィ","ダークライ","シェイミ","アルセウス","ビクティニ","ツタージャ","ジャノビー","ジャローダ","ポカブ","チャオブー","エンブオー","ミジュマル","フタチマル","ダイケンキ","ミネズミ","ミルホッグ","ヨーテリー","ハーデリア","ムーランド","チョロネコ","レパルダス","ヤナップ","ヤナッキー","バオップ","バオッキー","ヒヤップ","ヒヤッキー","ムンナ","ムシャーナ","マメパト","ハトーボー","ケンホロウ","シママ","ゼブライカ","ダンゴロ","ガントル","ギガイアス","コロモリ","ココロモリ","モグリュー","ドリュウズ","タブンネ","ドッコラー","ドテッコツ","ローブシン","オタマロ","ガマガル","ガマゲロゲ","ナゲキ","ダゲキ","クルミル","クルマユ","ハハコモリ","フシデ","ホイーガ","ペンドラー","モンメン","エルフーン","チュリネ","ドレディア","バスラオ","メグロコ","ワルビル","ワルビアル","ダルマッカ","ヒヒダルマ","マラカッチ","イシズマイ","イワパレス","ズルッグ","ズルズキン","シンボラー","デスマス","デスカーン","プロトーガ","アバゴーラ","アーケン","アーケオス","ヤブクロン","ダストダス","ゾロア","ゾロアーク","チラーミィ","チラチーノ","ゴチム","ゴチミル","ゴチルゼル","ユニラン","ダブラン","ランクルス","コアルヒー","スワンナ","バニプッチ","バニリッチ","バイバニラ","シキジカ","メブキジカ","エモンガ","カブルモ","シュバルゴ","タマゲタケ","モロバレル","プルリル","ブルンゲル","ママンボウ","バチュル","デンチュラ","テッシード","ナットレイ","ギアル","ギギアル","ギギギアル","シビシラス","シビビール","シビルドン","リグレー","オーベム","ヒトモシ","ランプラー","シャンデラ","キバゴ","オノンド","オノノクス","クマシュン","ツンベアー","フリージオ","チョボマキ","アギルダー","マッギョ","コジョフー","コジョンド","クリムガン","ゴビット","ゴルーグ","コマタナ","キリキザン","バッフロン","ワシボン","ウォーグル","バルチャイ","バルジーナ","クイタラン","アイアント","モノズ","ジヘッド","サザンドラ","メラルバ","ウルガモス","コバルオン","テラキオン","ビリジオン","トルネロス","ボルトロス","レシラム","ゼクロム","ランドロス","キュレム","ケルディオ","メロエッタ","ゲノセクト","ハリマロン","ハリボーグ","ブリガロン","フォッコ","テールナー","マフォクシー","ケロマツ","ゲコガシラ","ゲッコウガ","ホルビー","ホルード","ヤヤコマ","ヒノヤコマ","ファイアロー","コフキムシ","コフーライ","ビビヨン","シシコ","カエンジシ","フラベベ","フラエッテ","フラージェス","メェークル","ゴーゴート","ヤンチャム","ゴロンダ","トリミアン","ニャスパー","ニャオニクス","ヒトツキ","ニダンギル","ギルガルド","シュシュプ","フレフワン","ペロッパフ","ペロリーム","マーイーカ","カラマネロ","カメテテ","ガメノデス","クズモー","ドラミドロ","ウデッポウ","ブロスター","エレキテル","エレザード","チゴラス","ガチゴラス","アマルス","アマルルガ","ニンフィア","ルチャブル","デデンネ","メレシー","ヌメラ","ヌメイル","ヌメルゴン","クレッフィ","ボクレー","オーロット","バケッチャ","パンプジン","カチコール","クレベース","オンバーン","ゼルネアス","イベルタル","ジガルデ","ディアンシー","フーパ","ボルケニオン","モクロー","フクスロー","ジュナイパー","ニャビー","ニャヒート","ガオガエン","アシマリ","オシャマリ","アシレーヌ","ツツケラ","ケララッパ","ドデカバシ","ヤングース","デカグース","アゴジムシ","デンヂムシ","クワガノン","マケンカニ","ケケンカニ","オドリドリ","アブリー","アブリボン","イワンコ","ルガルガン","ヨワシ","ヒドイデ","ドヒドイデ","ドロバンコ","バンバドロ","シズクモ","オニシズクモ","カリキリ","ラランテス","ネマシュ","マシェード","ヤトウモリ","エンニュート","ヌイコグマ","キテルグマ","アマカジ","アママイコ","アマージョ","キュワワー","ヤレユータン","ナゲツケサル","コソクムシ","グソクムシャ","スナバァ","シロデスナ","ナマコブシ","タイプ：ヌル","シルヴァディ","メテノ","ネッコアラ","バクガメス","トゲデマル","ミミッキュ","ハギギシリ","ジジーロン","ダダリン","ジャラコ","ジャランゴ","ジャラランガ","カプ・コケコ","カプ・テテフ","カプ・ブルル","カプ・レヒレ","コスモッグ","コスモウム","ソルガレオ","ルナアーラ","ウツロイド","マッシブーン","フェローチェ","デンジュモク","テッカグヤ","カミツルギ","アクジキング","ネクロズマ","マギアナ","マーシャドー","ベベノム","アーゴヨン","ツンデツンデ","ズガドーン","ゼラオラ","メルタン","メルメタル","サルノリ","バチンキー","ゴリランダー","ヒバニー","ラビフット","エースバーン","メッソン","ジメレオン","インテレオン","ホシガリス","ヨクバリス","ココガラ","アオガラス","アーマーガア","サッチムシ","レドームシ","イオルブ","クスネ","フォクスライ","ヒメンカ","ワタシラガ","ウールー","バイウールー","カムカメ","カジリガメ","ワンパチ","パルスワン","タンドン","トロッゴン","セキタンザン","カジッチュ","アップリュー","タルップル","スナヘビ","サダイジャ","ウッウ","サシカマス","カマスジョー","エレズン","ストリンダー","ヤクデ","マルヤクデ","タタッコ","オトスパス","ヤバチャ","ポットデス","ミブリム","テブリム","ブリムオン","ベロバー","ギモー","オーロンゲ","タチフサグマ","ニャイキング","サニゴーン","ネギガナイト","バリコオル","デスバーン","マホミル","マホイップ","タイレーツ","バチンウニ","ユキハミ","モスノウ","イシヘンジン","コオリッポ","イエッサン","モルペコ","ゾウドウ","ダイオウドウ","パッチラゴン","パッチルドン","ウオノラゴン","ウオチルドン","ジュラルドン","ドラメシヤ","ドロンチ","ドラパルト","ザシアン","ザマゼンタ","ムゲンダイナ","ダクマ","ウーラオス","ザルード","レジエレキ","レジドラゴ","ブリザポス","レイスポス","バドレックス","アヤシシ","バサギリ","ガチグマ","イダイトウ","オオニューラ","ハリーマン","ラブトロス","ニャオハ","ニャローテ","マスカーニャ","ホゲータ","アチゲータ","ラウドボーン","クワッス","ウェルカモ","ウェーニバル","グルトン","パフュートン","タマンチュラ","ワナイダー","マメバッタ","エクスレッグ","パモ","パモット","パーモット","ワッカネズミ","イッカネズミ","パピモッチ","バウッツェル","ミニーブ","オリーニョ","オリーヴァ","イキリンコ","コジオ","ジオヅム","キョジオーン","カルボウ","グレンアルマ","ソウブレイズ","ズピカ","ハラバリー","カイデン","タイカイデン","オラチフ","マフィティフ","シルシュルー","タギングル","アノクサ","アノホラグサ","ノノクラゲ","リククラゲ","ガケガニ","カプサイジ","スコヴィラン","シガロコ","ベラカス","ヒラヒナ","クエスパトラ","カヌチャン","ナカヌチャン","デカヌチャン","ウミディグダ","ウミトリオ","オトシドリ","ナミイルカ","イルカマン","ブロロン","ブロロローム","モトトカゲ","ミミズズ","キラーメ","キラフロル","ボチ","ハカドッグ","カラミンゴ","アルクジラ","ハルクジラ","ミガルーサ","ヘイラッシャ","シャリタツ","コノヨザル","ドオー","リキキリン","ノココッチ","ドドゲザン","イダイナキバ","サケブシッポ","アラブルタケ","ハバタクカミ","チヲハウハネ","スナノケガワ","テツノワダチ","テツノツツミ","テツノカイナ","テツノコウベ","テツノドクガ","テツノイバラ","セビエ","セゴール","セグレイブ","コレクレー","サーフゴー","チオンジェン","パオジアン","ディ continental","イーユイ","トドロクツキ","テツノブジン","コライドン","ミライドン","ウネルミナモ","テツノイサハ","カミッチュ","チャデス","ヤバソチャ","イイネイヌ","マシマシラ","キチキギス","オーガポン","ブリジュラス","カミツオロチ","ウガツホムラ","タケルライコ","テツノイワオ","テツノカシラ","テラパゴス","モモワロウ"];
+
+    const validPokemonSet = new Set(fullList);
+    const pokemonList = fullList.filter(name => name.length === 5);
+
+    const layoutTop = [
+        ["ア","カ","サ","タ","ナ","ハ","マ","ヤ","ラ","ワ"],
+        ["イ","キ","シ","チ","ニ","ヒ","ミ","","リ","ン"],
+        ["ウ","ク","ス","ツ","ヌ","フ","ム","ユ","ル",""],
+        ["エ","ケ","セ","テ","ネ","ヘ","メ","","レ",""],
+        ["オ","コ","ソ","ト","ノ","ホ","モ","ヨ","ロ","ー"]
+    ];
+
+    const layoutBottom = [
+        ["ァ","ガ","ザ","ダ","","バ","パ","ャ","","♀"],
+        ["ィ","ギ","ジ","ヂ","","ビ","ピ","","","♂"],
+        ["ゥ","グ","ズ","ヅ","ッ","ブ","プ","ュ","",""],
+        ["ェ","ゲ","ゼ","デ","","ベ","ペ","","","2"],
+        ["ォ","ゴ","ゾ","ド","","ボ","ポ","ョ","","Z"]
+    ];
+
+    let solution = "";
+    const targetLength = 5;
+    const maxGuesses = 10;
+    let currentGuessCount = 0;
+    let isClearGame = false;
+    let isKeyboardBuilt = false;
+    let isAnimating = false;
+
+    let streak = 0;
+    let letterStatusMap = {};
+    let tileCache = [];
+
+    const LOCAL_STORAGE_KEY = "pokemon_wordle_streak";
+
+    function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+    // localStorageから連鎖記録を読み込む
+    function loadStreak() {
+        const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (saved !== null) {
+            streak = parseInt(saved, 10) || 0;
+        } else {
+            streak = 0;
+        }
+        const streakElem = document.getElementById("streakCount");
+        if (streakElem) streakElem.innerText = streak;
+    }
+
+    // 連鎖記録を更新しlocalStorageに保存する
+    function updateStreak(val) {
+        streak = val;
+        localStorage.setItem(LOCAL_STORAGE_KEY, streak);
+        const streakElem = document.getElementById("streakCount");
+        if (streakElem) streakElem.innerText = streak;
+    }
+
+    function initGame() {
+        solution = pokemonList[Math.floor(Math.random() * pokemonList.length)];
+        currentGuessCount = 0;
+        letterStatusMap = {};
+        isClearGame = false;
+        isAnimating = false;
+
+        hideAnswerToast();
+        document.getElementById("mainContainer").classList.remove("disabled-all");
+
+        const input = document.getElementById("guessInput");
+        input.value = "";
+        input.disabled = false;
+
+        document.getElementById("controlsArea").style.visibility = "visible";
+        document.getElementById("message").innerText = "";
+        document.getElementById("submitBtn").disabled = false;
+
+        const giveupBtn = document.getElementById("giveupBtn");
+        giveupBtn.style.display = "flex";
+        giveupBtn.disabled = false;
+
+        document.getElementById("endGameBtns").style.display = "none";
+
+        const grid = document.getElementById("grid");
+        let gridHTML = "";
+        for (let i = 0; i < maxGuesses; i++) {
+            gridHTML += `<div class="row-group" id="row-${i}">`;
+            for (let j = 0; j < targetLength; j++) {
+                gridHTML += `<div class="tile" id="tile-${i}-${j}"></div>`;
+            }
+            gridHTML += `</div>`;
+        }
+        grid.innerHTML = gridHTML;
+
+        tileCache = [];
+        for (let i = 0; i < maxGuesses; i++) {
+            let rowTiles = [];
+            for (let j = 0; j < targetLength; j++) {
+                rowTiles.push(document.getElementById(`tile-${i}-${j}`));
+            }
+            tileCache.push(rowTiles);
+        }
+
+        if (!isKeyboardBuilt) {
+            buildKeyboardOnce();
+            isKeyboardBuilt = true;
+        } else {
+            resetKeyboardClasses();
+        }
+
+        const streakElem = document.getElementById("streakCount");
+        if (streakElem) streakElem.innerText = streak;
+    }
+
+    function updateCurrentRowTiles() {
+        if (isAnimating || currentGuessCount >= maxGuesses) return;
+
+        const inputVal = document.getElementById("guessInput").value;
+        const convertedVal = inputVal.replace(/[\u3041-\u3096]/g, match => String.fromCharCode(match.charCodeAt(0) + 0x60));
+        const currentTiles = tileCache[currentGuessCount];
+
+        for (let j = 0; j < targetLength; j++) {
+            const tile = currentTiles[j];
+            const targetChar = j < convertedVal.length ? convertedVal[j] : "";
+
+            if (tile.innerText !== targetChar) tile.innerText = targetChar;
+
+            if (targetChar !== "") {
+                if (!tile.classList.contains("typing")) tile.classList.add("typing");
+            } else {
+                if (tile.classList.contains("typing")) tile.classList.remove("typing");
+            }
+        }
+    }
+
+    function handleKeyClick(char) {
+        if (isAnimating) return;
+        const input = document.getElementById("guessInput");
+        if (!input.disabled && input.value.length < 5) {
+            input.value += char;
+            updateCurrentRowTiles();
+        }
+    }
+
+    function buildKeyboardOnce() {
+        const createSection = (containerId, layoutData) => {
+            const container = document.getElementById(containerId);
+            const fragment = document.createDocumentFragment();
+            layoutData.forEach(row => {
+                row.forEach(char => {
+                    const keyTile = document.createElement("div");
+                    if (char === "") {
+                        keyTile.className = "key-tile empty";
+                    } else {
+                        keyTile.className = "key-tile";
+                        keyTile.id = `key-${char}`;
+                        keyTile.innerText = char;
+                        keyTile.onclick = () => handleKeyClick(char);
+                    }
+                    fragment.appendChild(keyTile);
+                });
+            });
+            container.appendChild(fragment);
+        };
+        createSection("keyboard-top", layoutTop);
+        createSection("keyboard-bottom", layoutBottom);
+    }
+
+    function resetKeyboardClasses() {
+        const keys = document.querySelectorAll(".key-tile:not(.empty)");
+        keys.forEach(k => k.className = "key-tile");
+    }
+
+    function updateKeyboardStatus(char, status) {
+        const currentStatus = letterStatusMap[char];
+        if (currentStatus === "correct") return;
+        if (currentStatus === "present" && status === "absent") return;
+
+        letterStatusMap[char] = status;
+        const keyTile = document.getElementById(`key-${char}`);
+        if (keyTile) keyTile.className = `key-tile ${status}`;
+    }
+
+    async function makeGuess() {
+        const submitBtn = document.getElementById("submitBtn");
+        if (isAnimating || submitBtn.disabled) return;
+
+        const input = document.getElementById("guessInput");
+        let guess = input.value.trim();
+        guess = guess.replace(/[\u3041-\u3096]/g, match => String.fromCharCode(match.charCodeAt(0) + 0x60));
+
+        if (guess.length < 3 || guess.length > 5) return;
+        if (!/^[\u30A0-\u30FF♀♂2Z:：\s]+$/.test(guess)) return;
+        if (!validPokemonSet.has(guess)) return;
+
+        isAnimating = true;
+        submitBtn.disabled = true;
+
+        let solutionLetterCounts = {};
+        for (let i = 0; i < targetLength; i++) {
+            let char = solution[i];
+            solutionLetterCounts[char] = (solutionLetterCounts[char] || 0) + 1;
+        }
+
+        let rowStatuses = Array(guess.length).fill("absent");
+
+        for (let i = 0; i < guess.length; i++) {
+            if (guess[i] === solution[i]) {
+                rowStatuses[i] = "correct";
+                solutionLetterCounts[guess[i]]--;
+            }
+        }
+
+        for (let i = 0; i < guess.length; i++) {
+            if (rowStatuses[i] !== "correct" && solutionLetterCounts[guess[i]] > 0) {
+                rowStatuses[i] = "present";
+                solutionLetterCounts[guess[i]]--;
+            }
+        }
+
+        const currentTiles = tileCache[currentGuessCount];
+        for (let i = 0; i < guess.length; i++) {
+            const tile = currentTiles[i];
+            tile.classList.remove("typing");
+            tile.innerText = guess[i];
+            tile.classList.add(rowStatuses[i]);
+            tile.classList.add("flip");
+            updateKeyboardStatus(guess[i], rowStatuses[i]);
+
+            await delay(250);
+        }
+
+        if (guess === solution) {
+            isClearGame = true;
+            updateStreak(streak + 1); // クリアで連鎖加算＆自動保存
+            disableInputArea();
+
+            const giveupBtn = document.getElementById("giveupBtn");
+            if (giveupBtn) giveupBtn.disabled = true;
+
+            isAnimating = false;
+
+            setTimeout(() => {
+                switchButtonsToEnd();
+                openModal(true);
+            }, 300);
+            return;
+        }
+
+        currentGuessCount++;
+        input.value = "";
+
+        if (currentGuessCount >= maxGuesses) {
+            handleGameFailure();
+        } else {
+            submitBtn.disabled = false;
+        }
+
+        isAnimating = false;
+    }
+
+    function giveUp(e) {
+        if (e) e.stopPropagation();
+        const giveupBtn = document.getElementById("giveupBtn");
+        if (isAnimating || (giveupBtn && giveupBtn.disabled)) return;
+        handleGameFailure();
+    }
+
+    function handleGameFailure() {
+        isClearGame = false;
+        updateStreak(0); // 失敗で連鎖リセット＆自動保存
+        disableInputArea();
+
+        document.getElementById("mainContainer").classList.add("disabled-all");
+        showAnswerToast(solution);
+
+        setTimeout(() => {
+            hideAnswerToast();
+            switchButtonsToEnd();
+            document.getElementById("mainContainer").classList.remove("disabled-all");
+            openModal(false);
+        }, 1800);
+    }
+
+    function disableInputArea() {
+        document.getElementById("guessInput").disabled = true;
+        document.getElementById("controlsArea").style.visibility = "hidden";
+        document.getElementById("submitBtn").disabled = true;
+    }
+
+    function switchButtonsToEnd() {
+        document.getElementById("giveupBtn").style.display = "none";
+        document.getElementById("endGameBtns").style.display = "flex";
+    }
+
+    function showAnswerToast(answerText) {
+        const toast = document.getElementById("answerToast");
+        toast.innerText = answerText;
+        toast.style.display = "block";
+    }
+
+    function hideAnswerToast() {
+        document.getElementById("answerToast").style.display = "none";
+    }
+
+    function handleBackspace() {
+        if (isAnimating) return;
+        const input = document.getElementById("guessInput");
+        if (!input.disabled) {
+            input.value = input.value.slice(0, -1);
+            updateCurrentRowTiles();
+        }
+    }
+
+    function openModal(isWin) {
+        document.getElementById("modalStreakCount").innerText = streak;
+        document.getElementById("modalButtonsArea").style.display = isWin ? "block" : "none";
+        document.getElementById("clearModal").style.display = "flex";
+    }
+
+    function closeModal() {
+        document.getElementById("clearModal").style.display = "none";
+    }
+
+    function modalNextGame() {
+        closeModal();
+        initGame();
+    }
+
+    function modalGiveUp() {
+        closeModal();
+        updateStreak(0); // モーダルでGIVE UPを選んだ場合もリセット＆自動保存
+        initGame();
+    }
+
+    const guessInputElem = document.getElementById("guessInput");
+    guessInputElem.addEventListener("input", updateCurrentRowTiles);
+    guessInputElem.addEventListener("keypress", function(event) {
+        if (event.key === "Enter" && !document.getElementById("submitBtn").disabled) {
+            makeGuess();
+        }
+    });
+
+    // 起動処理: 保存された連鎖数を読み込んでからゲーム開始
+    loadStreak();
+    initGame();
+</script>
+</body>
+</html>
